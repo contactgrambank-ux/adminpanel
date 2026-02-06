@@ -14,6 +14,8 @@ export default function Dashboard() {
   const [chartData, setChartData] = useState([]);
   const [donutData, setDonutData] = useState(null);
 
+
+
   useEffect(() => {
     loadDashboard();
   }, []);

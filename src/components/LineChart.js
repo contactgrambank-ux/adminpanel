@@ -13,12 +13,14 @@ export default function LineChart({ data }) {
     total: d.total
   }));
 
+  
+
   return (
     <>
       <h3 className="font-semibold mb-4">Transaction Volume (7 Days)</h3>
 
       <ResponsiveContainer width="100%" height={260}>
-        <LC data={formatted}>
+        <LC data={data}>
           <XAxis dataKey="day" />
           <YAxis />
           <Tooltip />

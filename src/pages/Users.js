@@ -6,7 +6,13 @@ import {
   Unlock,
   X
 } from "lucide-react";
-import { getAllUsers } from "../api/user.api";
+import {
+  getAllUsers,
+  getUserTransactions,
+  freezeUser,
+  unfreezeUser,
+  addBalanceToUser
+} from "../api/user.api";
 
 export default function Users() {
   const [users, setUsers] = useState([]);
@@ -14,12 +20,30 @@ export default function Users() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
-
+  const [userTransactions, setUserTransactions] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [showAddBalance, setShowAddBalance] = useState(false);
 
   useEffect(() => {
     loadUsers();
   }, [page]);
+
+  useEffect(() => {
+    if (selectedUser) {
+      loadUserTransactions(selectedUser._id);
+    }
+  }, [selectedUser]);
+
+  const loadUserTransactions = async (userId) => {
+    try {
+      const res = await getUserTransactions(userId);
+      setUserTransactions(res.data.transactions);
+    } catch (err) {
+      console.error("Failed to load user transactions", err);
+    } finally {
+      // setLoading(false);
+    }
+  };
 
   const loadUsers = async () => {
     try {
@@ -33,6 +57,27 @@ export default function Users() {
       setLoading(false);
     }
   };
+
+  const handleFreeze = async (userId) => {
+    try {
+      await freezeUser(userId);
+      loadUsers(); // refresh list
+      setSelectedUser(null);
+    } catch (err) {
+      console.error("Freeze failed", err);
+    }
+  };
+
+  const handleUnfreeze = async (userId) => {
+    try {
+      await unfreezeUser(userId);
+      loadUsers();
+      setSelectedUser(null);
+    } catch (err) {
+      console.error("Unfreeze failed", err);
+    }
+  };
+
 
   const filteredUsers = useMemo(() => {
     if (!search) return users;
@@ -99,49 +144,56 @@ export default function Users() {
                 <td className="td font-semibold">₹{user.balance}</td>
 
                 <td className="td">
-                  <span className={`badge badge-green`}>
-                    Active
+                  <span className={`badge ${user.status === "ACTIVE" ? "badge-green" : "badge-red"}`}>
+                    {user.status === "ACTIVE" ? 'Active' : 'Frozen'}
                   </span>
                 </td>
 
                 {/* ACTIONS */}
-                  <td className="td">
-                    <div className=" gap-9">
-                      <button
-                        onClick={() => setSelectedUser(user)}
-                        className="text-gray-600 hover:text-gray-900"
-                      >
-                        <Eye size={18} />
-                      </button>
+                <td className="td">
+                  <div className=" gap-9">
+                    <button
+                      onClick={() => setSelectedUser(user)}
+                      className="text-gray-600 hover:text-gray-900"
+                    >
+                      <Eye size={18} />
+                    </button>
 
-                      {user.status === "Active" ? (
-                        <button style={{paddingLeft : 30}} className="text-red-500 hover:text-red-600">
-                          <Lock size={18} />
-                        </button>
-                      ) : (
-                        <button style={{marginLeft : 30}} className="text-green-500 hover:text-green-600">
-                          <Unlock size={18} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                    {user.status === "ACTIVE" ? (
+                      <button onClick={() => handleFreeze(user._id)} style={{ paddingLeft: 30 }} className="text-red-500 hover:text-red-600">
+                        <Lock size={18} />
+                      </button>
+                    ) : (
+                      <button onClick={() => handleUnfreeze(user._id)} style={{ marginLeft: 30 }} className="text-green-500 hover:text-green-600">
+                        <Unlock size={18} />
+                      </button>
+                    )}
+                  </div>
+                </td>
 
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {showAddBalance && selectedUser && (
+        <AddBalanceModal
+          user={selectedUser}
+          onClose={() => setShowAddBalance(false)}
+          onSuccess={loadUsers}
+        />
+      )}
 
       {/* USER DETAILS DRAWER */}
       {selectedUser && (
-        <UserDrawer user={selectedUser} onClose={() => setSelectedUser(null)} />
+        <UserDrawer openAddBalance={() => setShowAddBalance(true)} handleFreeze={handleFreeze} userTransactions={userTransactions} user={selectedUser} onClose={() => setSelectedUser(null)} />
       )}
     </>
   );
 }
 
 /* ================= USER DRAWER ================= */
-function UserDrawer({ user, onClose }) {
+function UserDrawer({ user, userTransactions, onClose, handleFreeze, openAddBalance }) {
   return (
     <>
       {/* OVERLAY */}
@@ -161,6 +213,12 @@ function UserDrawer({ user, onClose }) {
             <X />
           </button>
         </div>
+        <button
+          onClick={openAddBalance}
+          className="mt-3 w-full py-3 rounded-xl bg-green-600 text-white font-medium"
+        >
+          ➕ Add Balance
+        </button>
 
         <Info label="Name" value={user.name} />
         <Info label="Phone" value={user.phoneNumber} />
@@ -168,8 +226,8 @@ function UserDrawer({ user, onClose }) {
         <Info
           label="Status"
           value={
-            <span className={`badge  badge-green`}>
-              {'Active'}
+            <span className={`badge ${user.status === "ACTIVE" ? "badge-green" : "badge-red"}`}>
+              {user.status === "ACTIVE" ? 'Active' : 'Frozen'}
             </span>
           }
         />
@@ -177,16 +235,106 @@ function UserDrawer({ user, onClose }) {
 
         {/* RECENT TRANSACTIONS (static placeholder) */}
         <h3 className="mt-6 mb-2 font-semibold">Recent Transactions</h3>
-        <div className="border rounded-lg p-3 text-sm">
-          TRX-45281
-          <div className="text-muted">31/01/2026</div>
-          <div className="text-green-600 font-semibold">+₹2,500 completed</div>
-        </div>
+        {userTransactions.length > 0 ? (
+          userTransactions.map((item, index) => (
+            <div key={index} className="border rounded-lg p-3 text-sm">
+              {item.txn_id}
+              <div className="text-muted">
+                {new Date(item.createdAt).toLocaleDateString()}
+              </div>
+              <div
+                className={`font-semibold ${item.type === "CREDIT" ? "text-green-600" : "text-red-600"
+                  }`}
+              >
+                {item.type === "CREDIT" ? "+" : "-"}₹{item.amount}
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="text-sm text-muted">No transactions found.</p>
+        )}
+
+
 
         {/* FREEZE BUTTON */}
-        <button className="mt-6 w-full py-3 rounded-xl bg-red-500 text-white font-medium">
+        <button onClick={() => handleFreeze(user._id)} className="mt-6 w-full py-3 rounded-xl bg-red-500 text-white font-medium">
           Freeze Account
         </button>
+      </div>
+    </>
+  );
+}
+function AddBalanceModal({ user, onClose, onSuccess }) {
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!amount || Number(amount) <= 0) return;
+
+    try {
+      setLoading(true);
+      await addBalanceToUser({
+        userId: user._id,
+        amount: Number(amount),
+        reason
+      });
+
+      onSuccess(); // refresh user list
+      onClose();
+    } catch (err) {
+      console.error("Add balance failed", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+
+      <div className="fixed inset-0 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl w-[360px] p-6">
+          <h2 className="text-lg font-semibold mb-4">Add Balance</h2>
+
+          <div className="mb-3">
+            <label className="text-sm text-muted">Amount (₹)</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              className="w-full mt-1 px-4 py-2 border rounded-lg"
+              placeholder="5000"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="text-sm text-muted">Reason</label>
+            <input
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              className="w-full mt-1 px-4 py-2 border rounded-lg"
+              placeholder="Salary / Adjustment"
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2 border rounded-lg"
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 py-2 rounded-lg bg-green-600 text-white"
+            >
+              {loading ? "Adding..." : "Add"}
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );

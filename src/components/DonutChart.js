@@ -4,8 +4,8 @@ export default function DonutChart({ data }) {
   if (!data) return null;
 
   const chartData = [
-    { name: "Credit", value: data.Credit },
-    { name: "Debit", value: data.Debit }
+    { name: "Credit", value: data.CREDIT },
+    { name: "Debit", value: data.DEBIT }
   ];
 
   return (
@@ -26,10 +26,10 @@ export default function DonutChart({ data }) {
 
       <div className="flex justify-center gap-4 text-sm mt-4">
         <span className="text-green-600">
-          ■ Credit: {data.Credit}
+          ■ Credit: {data.CREDIT}
         </span>
         <span className="text-gray-700 dark:text-gray-300">
-          ■ Debit: {data.Debit}
+          ■ Debit: {data.DEBIT}
         </span>
       </div>
     </>
